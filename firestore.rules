@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Entity Validations ---
+
+    function isValidUser(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.email is string && data.email.matches('^[^@]+@[^@]+\\.[^@]+$') &&
+             data.role in ['admin', 'seller'] &&
+             (!('status' in data) || data.status in ['active', 'inactive']) &&
+             (!('type' in data) || data.type in ['PF', 'PJ']);
+    }
+
+    function isValidSale(data) {
+      return data.sellerId is string && isValidId(data.sellerId) &&
+             data.clientName is string && data.clientName.size() > 0 && data.clientName.size() <= 255 &&
+             data.value is number && data.value >= 0 &&
+             data.status in ['proposta', 'assinado', 'ativado', 'pago'] &&
+             (!('unit' in data) || data.unit is string) &&
+             (!('municipality' in data) || data.municipality is string);
+    }
+
+    // --- Collections ---
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      
+      allow create: if isSignedIn() && isOwner(userId) && isValidUser(incoming()) && 
+                    // New users can't set themselves as admin unless it's the very first user (simplified)
+                    // For safety, we assume admin creation is handled server-side or via existing admin
+                    incoming().role == 'seller';
+                    
+      allow update: if isSignedIn() && (
+        (isAdmin() && isValidUser(incoming())) ||
+        (isOwner(userId) && isValidUser(incoming()) && 
+         incoming().role == existing().role &&  // Can't change own role
+         incoming().email == existing().email  // Can't change own email easily
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    match /sales/{saleId} {
+      allow get: if isSignedIn() && (isOwner(existing().sellerId) || isAdmin());
+      allow list: if isSignedIn() && (
+        isAdmin() || 
+        (resource.data.sellerId == request.auth.uid)
+      );
+
+      allow create: if isSignedIn() && (
+        (isAdmin() && isValidSale(incoming())) ||
+        (incoming().sellerId == request.auth.uid && isValidSale(incoming()))
+      );
+
+      allow update: if isSignedIn() && (
+        (isAdmin() && isValidSale(incoming())) ||
+        (existing().sellerId == request.auth.uid && isValidSale(incoming()) && 
+         incoming().sellerId == existing().sellerId) // Seller can't transfer sale
+      );
+
+      allow delete: if isAdmin();
+    }
+  }
+}

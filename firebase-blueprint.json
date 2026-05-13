@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information including roles and personal details.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "seller"] },
+        "type": { "type": "string", "enum": ["PF", "PJ"] },
+        "document": { "type": "string", "description": "CPF or CNPJ" },
+        "municipality": { "type": "string" },
+        "unit": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "driveFolder": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "monthlyGoal": { "type": "number", "description": "Target sales value per month" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "Sale": {
+      "title": "Sales Contract",
+      "description": "Details of a closed sale or contract.",
+      "type": "object",
+      "properties": {
+        "sellerId": { "type": "string", "description": "Reference to the User ID" },
+        "clientName": { "type": "string" },
+        "value": { "type": "number" },
+        "type": { "type": "string", "enum": ["PF", "PJ"] },
+        "status": { "type": "string", "enum": ["proposta", "assinado", "ativado", "pago"] },
+        "unit": { "type": "string" },
+        "municipality": { "type": "string" },
+        "driveUrl": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "commission": { "type": "number" },
+        "bonus": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["sellerId", "clientName", "value", "status"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and configuration."
+    },
+    "sales/{saleId}": {
+      "schema": "Sale",
+      "description": "Sales records."
+    }
+  }
+}
